@@ -767,6 +767,64 @@ export function Studio({ user, onOpenAuth, onPublished }: StudioProps) {
     (u) => u.trigger.trim().length > 0 && u.pivot_action.trim().length > 0
   ).length;
 
+
+  function isUnpublishedConceptId(id: string) {
+    // Catalog concepts (seed and server-issued) always use a `cpt_` prefix.
+    // Draft extraction uses temporary ids such as `new_1` or `tmp-1`.
+    return !id.startsWith('cpt_');
+  }
+
+  async function publishNewConcepts(finalNodes: SnapshotNode[]): Promise<SnapshotNode[]> {
+    const tempToReal: Record<string, string> = {};
+    const created: Concept[] = [];
+    const stageByConcept: Record<string, SnapshotNode['stage']> = {};
+    for (const node of finalNodes) {
+      stageByConcept[node.concept_id] = node.stage;
+    }
+
+    async function ensureCreated(id: string): Promise<string> {
+      if (!isUnpublishedConceptId(id)) return id;
+      if (tempToReal[id]) return tempToReal[id];
+      const local = conceptsMap[id];
+      const parentId = local?.parent_concept_id ?? null;
+      const parent = parentId ? await ensureCreated(parentId) : null;
+      const createdConcept = await api.createConcept({
+        stage: local?.stage ?? stageByConcept[id] ?? 'premise',
+        title: local?.title ?? id,
+        description: local?.description ?? '',
+        parent_concept_id: parent,
+      });
+      tempToReal[id] = createdConcept.id;
+      created.push(createdConcept);
+      return createdConcept.id;
+    }
+
+    for (const node of finalNodes) {
+      if (!isUnpublishedConceptId(node.concept_id)) continue;
+      await ensureCreated(node.concept_id);
+    }
+    if (created.length > 0) {
+      setConceptsMap((prev) => {
+        const next = { ...prev };
+        for (const [tempId, realId] of Object.entries(tempToReal)) {
+          const local = next[tempId];
+          delete next[tempId];
+          const createdConcept = created.find((c) => c.id === realId);
+          if (createdConcept) next[createdConcept.id] = createdConcept;
+          else if (local) next[realId] = { ...local, id: realId };
+        }
+        return next;
+      });
+      setNodes((prev) =>
+        prev.map((n) => ({ ...n, concept_id: tempToReal[n.concept_id] ?? n.concept_id }))
+      );
+    }
+    return finalNodes.map((n) => ({
+      ...n,
+      concept_id: tempToReal[n.concept_id] ?? n.concept_id,
+    }));
+  }
+
   async function handlePublish() {
     setPublishError(null);
     const activeNodes = nodes.filter((n) => n.stance === 'active' || n.stance === 'open_crux');
@@ -837,11 +895,11 @@ export function Studio({ user, onOpenAuth, onPublished }: StudioProps) {
         }
       }
 
-      const finalSummary =
-        summary.trim() ||
-        `Theory of Change focusing on ${
-          conceptsMap[finalNodes.find((n) => n.stage === 'bet')?.concept_id ?? '']?.title ?? 'AI Safety'
-        }.`;
+      const betTitle =
+        conceptsMap[finalNodes.find((n) => n.stage === 'bet')?.concept_id ?? '']?.title ?? 'AI Safety';
+      const publishedNodes = await publishNewConcepts(finalNodes);
+
+      const finalSummary = summary.trim() || `Theory of Change focusing on ${betTitle}.`;
 
       await api.publishSnapshot({
         actor_handle: targetExistingHandle ?? cleanHandle,
@@ -849,7 +907,7 @@ export function Studio({ user, onOpenAuth, onPublished }: StudioProps) {
         summary: finalSummary,
         essay_markdown: essayMarkdown.trim() || undefined,
         changelog_note: changelogNote.trim() || undefined,
-        nodes: finalNodes,
+        nodes: publishedNodes,
         edges: cleanEdges,
         update_criteria: cleanCriteria,
       });

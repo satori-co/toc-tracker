@@ -135,29 +135,27 @@ export function CreateFromDocsPanel({
     try {
       const keptNodes = draft.nodes.filter((n) => selectedNodeIds.has(n.local_id));
       const usedTempIds = new Set(keptNodes.map((n) => n.concept_id));
-      const toCreate = draft.proposed_concepts.filter((pc) => usedTempIds.has(pc.temp_id));
-
-      const tempToReal: Record<string, string> = {};
-      const createdConcepts: Concept[] = [];
-      for (const pc of toCreate) {
-        const created = await api.createConcept({
+      // Keep new claims local until the map is published. Creating them in the
+      // catalog here left abandoned drafts in the shared vocabulary.
+      const localConcepts: Concept[] = draft.proposed_concepts
+        .filter((pc) => usedTempIds.has(pc.temp_id))
+        .map((pc) => ({
+          schema_version: 1,
+          id: pc.temp_id,
           stage: pc.stage,
           title: pc.title,
           description: pc.description,
           parent_concept_id: pc.parent_concept_id ?? null,
-        });
-        tempToReal[pc.temp_id] = created.id;
-        createdConcepts.push(created);
+          root_concept_id: pc.parent_concept_id ?? pc.temp_id,
+          tags: [],
+          created_at: new Date().toISOString(),
+        }));
+
+      if (localConcepts.length > 0) {
+        onConceptsCreated(localConcepts);
       }
 
-      if (createdConcepts.length > 0) {
-        onConceptsCreated(createdConcepts);
-      }
-
-      const finalNodes = keptNodes.map((n) => ({
-        ...n,
-        concept_id: tempToReal[n.concept_id] ?? n.concept_id,
-      }));
+      const finalNodes = keptNodes;
       const keptSet = new Set(finalNodes.map((n) => n.local_id));
       const finalEdges = draft.edges.filter(
         (e) => keptSet.has(e.source_local_id) && keptSet.has(e.target_local_id)
