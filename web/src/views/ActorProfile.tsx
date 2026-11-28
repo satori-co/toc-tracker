@@ -38,6 +38,10 @@ interface ActorProfileProps {
   onOpenAuth: () => void;
 }
 
+function githubIssueUrl(title: string, body: string) {
+  return `https://github.com/satori-co/toc-tracker/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
+
 export function ActorProfile({ user, isAdmin = false, onOpenAuth }: ActorProfileProps) {
   const { handle = '' } = useParams();
   const navigate = useNavigate();
@@ -177,6 +181,22 @@ export function ActorProfile({ user, isAdmin = false, onOpenAuth }: ActorProfile
   const isOwner = Boolean(user && (actor.owner_user_id === user.id || isAdmin));
   const essayContent = snapshot?.essay_markdown || actor.essay_markdown || '';
   const refLinks = actor.references ?? [];
+
+  // Who can claim: the server only accepts a sign-in whose X (or GitHub) handle matches the
+  // handle stored on the profile. Say so before the person starts building, not at publish.
+  const normHandle = (h?: string | null) => (h ?? '').trim().replace(/^@/, '').toLowerCase();
+  const expectedClaimHandle = normHandle(actor.verified_handle);
+  const signedInHandles = [normHandle(user?.x_handle), normHandle(user?.github_handle)].filter(Boolean);
+  const claimHandleMatches = Boolean(expectedClaimHandle) && signedInHandles.includes(expectedClaimHandle);
+  const canStartClaim = isAdmin || !user || claimHandleMatches;
+  const claimRequestUrl = githubIssueUrl(
+    `Claim request: ${actor.display_name}`,
+    `I am ${actor.display_name} and would like to claim https://toctracker.com/a/${actor.handle}.\n\nA link that shows this is me (personal site, X profile, or work page):\n\n`
+  );
+  const takedownRequestUrl = githubIssueUrl(
+    `Takedown request: ${actor.display_name}`,
+    `Please take down https://toctracker.com/a/${actor.handle}.\n\nOptional reason:\n\n`
+  );
 
   function handleClaimChoice(mode: 'augment' | 'wipe') {
     setClaimModalOpen(false);
@@ -1105,9 +1125,27 @@ export function ActorProfile({ user, isAdmin = false, onOpenAuth }: ActorProfile
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink-secondary)]">
-              How would you like to take ownership of this Theory of Change?
-            </p>
+            {expectedClaimHandle ? (
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink-secondary)]">
+                To claim this profile, sign in with X as <strong>@{expectedClaimHandle}</strong>. Your edits
+                publish as a new version under your name.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink-secondary)]">
+                This profile is not linked to an account yet, so a maintainer verifies claims by hand. Send a
+                request and we will link it to your account.
+              </p>
+            )}
+            {user && expectedClaimHandle && !claimHandleMatches && !isAdmin && (
+              <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                {signedInHandles.length > 0
+                  ? `You are signed in as @${signedInHandles[0]}.`
+                  : 'You are signed in without an X account.'}{' '}
+                Only @{expectedClaimHandle} can claim this profile. If that is you under a different handle, send a
+                claim request below.
+              </p>
+            )}
+            {canStartClaim && (expectedClaimHandle || isAdmin) ? (
             <div className="mt-4 space-y-2.5">
               <button
                 onClick={() => handleClaimChoice('augment')}
@@ -1132,6 +1170,23 @@ export function ActorProfile({ user, isAdmin = false, onOpenAuth }: ActorProfile
                 </p>
               </button>
             </div>
+            ) : (
+              <a
+                href={claimRequestUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 block w-full rounded-xl bg-[var(--ink-primary)] px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90"
+              >
+                Send a claim request
+              </a>
+            )}
+            <p className="mt-4 text-[11px] text-[var(--ink-muted)]">
+              Would you rather this profile came down?{' '}
+              <a href={takedownRequestUrl} target="_blank" rel="noreferrer" className="underline">
+                Ask for a takedown
+              </a>
+              .
+            </p>
           </div>
         </div>
       )}
