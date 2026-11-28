@@ -594,7 +594,8 @@ export function Studio({ user, onOpenAuth, onPublished }: StudioProps) {
       concept_id: concept.id,
       stage,
       stance: 'active',
-      is_load_bearing_crux: stage === 'intervention' && !nodes.some((n) => n.is_load_bearing_crux),
+      // Never pre-mark a crux: the author chooses it in the Crux step.
+      is_load_bearing_crux: false,
       credence: needsCredence ? { ...selectedCredence } : null,
       bet_priority: stage === 'bet' ? 'primary' : null,
       note: null,
@@ -2270,6 +2271,11 @@ export function Studio({ user, onOpenAuth, onPublished }: StudioProps) {
                     />
                   </div>
                 </div>
+
+                <p className="mt-4 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-3 py-2 text-xs text-[var(--ink-secondary)]">
+                  Published versions are archived permanently and cannot be deleted. You can publish a new version at any
+                  time.
+                </p>
 
                 {publishError && (
                   <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
