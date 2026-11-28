@@ -195,7 +195,8 @@ export function ActorProfile({ user, isAdmin = false, onOpenAuth }: ActorProfile
           <div className="flex items-center gap-2 text-[var(--semantic-crux-text)]">
             <UserCheck className="h-4 w-4 shrink-0" />
             <span>
-              <strong>Community draft.</strong> Are you <strong>{actor.display_name}</strong>? Claim to verify or edit.
+              <strong>Best guess from public writing. Not yet reviewed by this person.</strong> Are you{' '}
+              <strong>{actor.display_name}</strong>? Claim it to review or edit.
             </span>
           </div>
           <button

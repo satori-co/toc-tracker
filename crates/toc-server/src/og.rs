@@ -152,6 +152,40 @@ pub fn render_home_og_png(actor_count: usize, concept_count: usize) -> Result<Ve
     render_svg_to_png(&svg)
 }
 
+/// Plain status line for share images. A community draft must say so, so a screenshot carries it.
+pub(crate) const DRAFT_STATUS_TEXT: &str = "Best guess from public writing. Not yet reviewed by this person.";
+
+fn actor_status_svg(actor: &Actor, version: i32) -> String {
+    if actor.authorship_status == AuthorshipStatus::CommunityDraft {
+        format!(
+            r##"<rect x="590" y="20" width="554" height="34" rx="17" fill="#FFFBEB" stroke="#D97706" stroke-width="1.5"/>
+  <text x="867" y="43" font-size="15" font-weight="700" fill="#92400E" text-anchor="middle">{}</text>"##,
+            xml_escape(DRAFT_STATUS_TEXT)
+        )
+    } else {
+        format!(
+            r##"<text x="1000" y="44" font-size="15" font-family="monospace" fill="#52525B">v{version} · Open Data</text>"##
+        )
+    }
+}
+
+fn compare_draft_svg(actor_a: &Actor, actor_b: &Actor) -> String {
+    let drafts: Vec<&str> = [actor_a, actor_b]
+        .into_iter()
+        .filter(|a| a.authorship_status == AuthorshipStatus::CommunityDraft)
+        .map(|a| a.display_name.as_str())
+        .collect();
+    if drafts.is_empty() {
+        return String::new();
+    }
+    let who = if drafts.len() == 2 { "Both maps are".to_string() } else { format!("{}'s map is", drafts[0]) };
+    let line = format!("{who} a best guess from public writing, not yet reviewed by the person.");
+    format!(
+        r##"<text x="56" y="206" font-size="14" font-weight="700" fill="#92400E">{}</text>"##,
+        xml_escape(&truncate_words(&line, 110))
+    )
+}
+
 pub fn render_actor_og_png(
     actor: &Actor,
     snapshot: &ToCSnapshot,
@@ -219,7 +253,7 @@ pub fn render_actor_og_png(
   <rect x="0" y="0" width="1200" height="72" fill="#FFFFFF"/>
   <line x1="0" y1="72" x2="1200" y2="72" stroke="#E4E2DC" stroke-width="1"/>
   <text x="56" y="46" font-size="24" font-weight="700" fill="#18181B">toctracker.com</text>
-  <text x="1000" y="44" font-size="15" font-family="monospace" fill="#52525B">v{ver} · Open Data</text>
+  {status}
 
   <text x="56" y="136" font-size="38" font-weight="700" fill="#18181B">{name}</text>
   <text x="56" y="170" font-size="18" fill="#52525B">{role}</text>
@@ -231,7 +265,7 @@ pub fn render_actor_og_png(
   <text x="80" y="492" font-size="14" font-family="monospace" font-weight="700" fill="#92400E">WHAT WOULD CHANGE THEIR MIND</text>
   <text x="80" y="532" font-size="19" font-weight="600" fill="#18181B">{uc}</text>
 </svg>"##,
-        ver = snapshot.version,
+        status = actor_status_svg(actor, snapshot.version),
         name = xml_escape(&truncate_words(&actor.display_name, 42)),
         role = xml_escape(&truncate_words(&actor.role_or_affiliation, 74)),
         summary = xml_escape(&truncate_words(&snapshot.summary, 94)),
@@ -278,6 +312,7 @@ pub fn render_compare_og_png(
   <circle cx="628" cy="148" r="9" fill="#059669"/>
   <text x="650" y="157" font-size="25" font-weight="700" fill="#18181B">{name_b}</text>
 
+  {draft_line}
   <rect x="56" y="218" width="260" height="52" rx="26" fill="#F3F2EC"/>
   <text x="86" y="251" font-size="19" font-weight="700" fill="#18181B">Both agree ({shared})</text>
 
@@ -294,6 +329,7 @@ pub fn render_compare_og_png(
   <text x="88" y="482" font-size="20" fill="#52525B">{detail}</text>
   <text x="88" y="534" font-size="15" font-family="monospace" fill="#71717A">Compare positions, credences &amp; update criteria at toctracker.com</text>
 </svg>"##,
+        draft_line = compare_draft_svg(actor_a, actor_b),
         name_a = xml_escape(&truncate_words(&actor_a.display_name, 26)),
         name_b = xml_escape(&truncate_words(&actor_b.display_name, 30)),
         shared = diff.summary.shared_ground_count,
