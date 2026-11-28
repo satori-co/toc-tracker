@@ -160,6 +160,17 @@ export function CompareDiff() {
         {/* Plain-English Summary Strip + Earliest Split Diagnostic */}
         {data && (
           <div className="mt-3.5 space-y-2.5 border-t border-[var(--border-hairline)] pt-3 text-xs">
+            {(() => {
+              const drafts = [data.actor_a, data.actor_b].filter((a) => a.authorship_status === 'community_draft');
+              if (drafts.length === 0) return null;
+              const who =
+                drafts.length === 2 ? 'Both maps are' : `${drafts[0].display_name}\u2019s map is`;
+              return (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-medium text-amber-900">
+                  {who} a best guess from public writing, not yet reviewed by the person.
+                </p>
+              );
+            })()}
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[var(--bg-subtle)] px-3 py-1 font-semibold text-[var(--ink-primary)]">
                 Both agree on {data.diff.summary.shared_ground_count}
